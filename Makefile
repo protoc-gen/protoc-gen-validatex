@@ -20,7 +20,7 @@ example:
 	protoc --proto_path=. \
 		   --go_out=paths=source_relative:. \
 		   --validatex_out=paths=source_relative:. \
-		   --validatex_opt=i18n_dir=./example/i18n \
+		   --validatex_opt=i18n_dir=./example/i18n,i18n_out_relative_dir=./example/i18n \
 		   ./example/*.proto
 
 .PHONY: all
