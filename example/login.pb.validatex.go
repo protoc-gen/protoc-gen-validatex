@@ -6,17 +6,30 @@
 package main
 
 import (
+	context "context"
 	fmt "fmt"
+	toml "github.com/BurntSushi/toml"
+	i18n "github.com/nicksnyder/go-i18n/v2/i18n"
+	validatex "github.com/protoc-gen/protoc-gen-validatex/pkg/validatex"
+	language "golang.org/x/text/language"
 	mail "net/mail"
+	os "os"
+	path "path"
 	regexp "regexp"
 	strings "strings"
 )
 
-func (x *SignInRequest) Validate() error {
+func (x *SignInRequest) Validate(ctx context.Context) error {
 	if x == nil {
 		return nil
 	}
 	if validEmail(x.Email) != nil {
+		localize, err := i18n.NewLocalizer(i18nBundle,
+			validatex.GetValFromCtx(ctx, validatex.KeyXLang), validatex.GetValFromCtx(ctx, validatex.KeyAcceptLang)).
+			Localize(&i18n.LocalizeConfig{MessageID: "EmailInvalid", TemplateData: map[string]string{"FieldName": "email"}})
+		if err == nil {
+			return fmt.Errorf(localize)
+		}
 		return fmt.Errorf("field email must be a valid email")
 	}
 	if len(x.Password) < 5 {
@@ -75,4 +88,24 @@ func validEmail(email string) error {
 func isValidDomain(domain string) bool {
 	re := regexp.MustCompile(`^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	return re.MatchString(domain)
+}
+
+var (
+	i18nBundle = newI18n("./example/i18n")
+)
+
+func newI18n(dir string) *i18n.Bundle {
+	bundle := i18n.NewBundle(language.English)
+	bundle.RegisterUnmarshalFunc("toml", toml.Unmarshal)
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		panic(err)
+	}
+	for _, file := range files {
+		if path.Ext(file.Name()) != ".toml" {
+			continue
+		}
+		bundle.MustLoadMessageFile(path.Join(dir, file.Name()))
+	}
+	return bundle
 }

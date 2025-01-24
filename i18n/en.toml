@@ -1,0 +1,2 @@
+[EmailInvalid]
+other = "{{.FieldName}} must be a valid email address"
