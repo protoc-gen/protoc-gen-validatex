@@ -12,7 +12,7 @@ import (
 	validatex "github.com/protoc-gen/protoc-gen-validatex/pkg/validatex"
 )
 
-func (x *SignInRequest) Validate(ctx context.Context) error {
+func (x *SignUpRequest) Validate(ctx context.Context) error {
 	if x == nil {
 		return nil
 	}

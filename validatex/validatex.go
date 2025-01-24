@@ -5,30 +5,13 @@ import (
 	"github.com/protoc-gen/protoc-gen-validatex/version"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
-	"strings"
-	"text/template"
 )
 
 const (
 	contextPkg   = protogen.GoImportPath("context")
 	pkgFmt       = protogen.GoImportPath("fmt")
-	mailPkg      = protogen.GoImportPath("net/mail")
-	stringsPkg   = protogen.GoImportPath("strings")
-	regexpPkg    = protogen.GoImportPath("regexp")
-	osPkg        = protogen.GoImportPath("os")
-	pathPkg      = protogen.GoImportPath("path")
-	langPkg      = protogen.GoImportPath("golang.org/x/text/language")
-	tomlPkg      = protogen.GoImportPath("github.com/BurntSushi/toml")
 	i18nPkg      = protogen.GoImportPath("github.com/nicksnyder/go-i18n/v2/i18n")
 	validatexPkg = protogen.GoImportPath("github.com/protoc-gen/protoc-gen-validatex/pkg/validatex")
-)
-
-var (
-	//go:embed template/ValidEmail.tpl
-	validEmailFunc string
-
-	//go:embed template/i18n.tpl
-	newI18nFunc string
 )
 
 func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
@@ -43,13 +26,6 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
 	g.P()
 	g.QualifiedGoIdent(contextPkg.Ident(""))
 	g.QualifiedGoIdent(pkgFmt.Ident(""))
-	g.QualifiedGoIdent(mailPkg.Ident(""))
-	g.QualifiedGoIdent(stringsPkg.Ident(""))
-	g.QualifiedGoIdent(regexpPkg.Ident(""))
-	g.QualifiedGoIdent(osPkg.Ident(""))
-	g.QualifiedGoIdent(pathPkg.Ident(""))
-	g.QualifiedGoIdent(langPkg.Ident(""))
-	g.QualifiedGoIdent(tomlPkg.Ident(""))
 	g.QualifiedGoIdent(i18nPkg.Ident(""))
 	g.QualifiedGoIdent(validatexPkg.Ident(""))
 	g.P()
@@ -59,29 +35,9 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
 	}
 
 	g.P()
-	g.P(validEmailFunc)
-	g.P()
-	g.P(i18n(i18nDir))
-}
-
-func i18n(s string) string {
-	data := struct {
-		I18nDir string
-	}{
-		I18nDir: s,
-	}
-
-	tmpl, err := template.New("i18nTemplate").Parse(newI18nFunc)
-	if err != nil {
-		panic(err)
-	}
-
-	var result strings.Builder
-	err = tmpl.Execute(&result, data)
-	if err != nil {
-		panic(err)
-	}
-	return result.String()
+	g.P("func init() {")
+	g.P("  validatex.Init18n(\"", i18nDir, "\")")
+	g.P("}")
 }
 
 func generate(g *protogen.GeneratedFile, message *protogen.Message) {
@@ -113,14 +69,10 @@ func generateField(g *protogen.GeneratedFile, field *protogen.Field) {
 	case *FieldRules_String_:
 		stringRules := t.String_
 		if stringRules.Email {
-			g.P("  if validEmail(", fieldName, ") != nil {")
-			g.P("    localize, err := i18n.NewLocalizer(i18nBundle,")
-			g.P("      validatex.GetValFromCtx(ctx, validatex.KeyXLang), validatex.GetValFromCtx(ctx, validatex.KeyAcceptLang)).")
-			g.P("      Localize(&i18n.LocalizeConfig{MessageID: \"EmailInvalid\", TemplateData: map[string]string{\"FieldName\": \"", field.Desc.Name(), "\"}})")
-			g.P("    if err == nil {")
-			g.P("      return fmt.Errorf(localize)")
-			g.P("    }")
-			g.P("    return fmt.Errorf(\"field ", field.Desc.Name(), " must be a valid email\")")
+			g.P("  if validatex.ValidEmail(", fieldName, ") != nil {")
+			g.P("    return fmt.Errorf(validatex.MustLocalize(ctx,")
+			g.P("      &i18n.LocalizeConfig{MessageID: \"EmailInvalid\", TemplateData: map[string]string{\"FieldName\": \"", field.Desc.Name(), "\"}},")
+			g.P("      \"field ", field.Desc.Name(), " must be a valid email\"))")
 			g.P("  }")
 		}
 		if stringRules.MinLen > 0 {

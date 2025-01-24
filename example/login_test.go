@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -94,11 +95,13 @@ func TestSignInRequest_ValidateEmail(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	// Iterate over each test case
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Run the validation
-			err := tt.req.Validate()
+			err := tt.req.Validate(ctx)
 
 			// Check if the error is expected
 			if tt.expectError {
