@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "github.com/protoc-gen/protoc-gen-validatex/example;main";
+
+import "validatex/validatex.proto";
+
+message SignInRequest {
+  string email = 1 [(validatex.rules).string.email = true];
+  string password = 2 [(validatex.rules).string = {min_len: 5, max_len: 50}];
+}
