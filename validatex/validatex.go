@@ -70,9 +70,11 @@ func generateField(g *protogen.GeneratedFile, field *protogen.Field) {
 		stringRules := t.String_
 		if stringRules.Email {
 			g.P("  if validatex.ValidEmail(", fieldName, ") != nil {")
-			g.P("    return fmt.Errorf(validatex.MustLocalize(ctx,")
-			g.P("      &i18n.LocalizeConfig{MessageID: \"EmailInvalid\", TemplateData: map[string]string{\"FieldName\": \"", field.Desc.Name(), "\"}},")
-			g.P("      \"field ", field.Desc.Name(), " must be a valid email\"))")
+			g.P("    return validatex.NewError(")
+			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"EmailInvalid\",")
+			g.P("        TemplateData: map[string]string{\"FieldName\": \"", field.Desc.Name(), "\"},")
+			g.P("      }, \"must be a valid email\")).")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
 			g.P("  }")
 		}
 		if stringRules.MinLen > 0 {
