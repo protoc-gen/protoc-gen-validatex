@@ -9,7 +9,6 @@ import (
 
 const (
 	contextPkg   = protogen.GoImportPath("context")
-	pkgFmt       = protogen.GoImportPath("fmt")
 	i18nPkg      = protogen.GoImportPath("github.com/nicksnyder/go-i18n/v2/i18n")
 	validatexPkg = protogen.GoImportPath("github.com/protoc-gen/protoc-gen-validatex/pkg/validatex")
 )
@@ -25,7 +24,6 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
 	g.P("package ", file.GoPackageName)
 	g.P()
 	g.QualifiedGoIdent(contextPkg.Ident(""))
-	g.QualifiedGoIdent(pkgFmt.Ident(""))
 	g.QualifiedGoIdent(i18nPkg.Ident(""))
 	g.QualifiedGoIdent(validatexPkg.Ident(""))
 	g.P()
@@ -79,12 +77,37 @@ func generateField(g *protogen.GeneratedFile, field *protogen.Field) {
 		}
 		if stringRules.MinLen > 0 {
 			g.P("  if len(", fieldName, ") < ", stringRules.MinLen, " {")
-			g.P("    return fmt.Errorf(\"field ", field.Desc.Name(), " must have at least ", stringRules.MinLen, " characters\")")
+			g.P("    return validatex.NewError(")
+			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMinLen\",")
+			g.P("        TemplateData: map[string]string{\"MinLen\": \"", stringRules.MinLen, "\"},")
+			g.P("      }, \"must be at least ", stringRules.MinLen, " characters long\")).")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
 			g.P("  }")
 		}
 		if stringRules.MaxLen > 0 {
 			g.P("  if len(", fieldName, ") > ", stringRules.MaxLen, " {")
-			g.P("    return fmt.Errorf(\"field ", field.Desc.Name(), " must have at most ", stringRules.MaxLen, " characters\")")
+			g.P("    return validatex.NewError(")
+			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMaxLen\",")
+			g.P("        TemplateData: map[string]string{\"MaxLen\": \"", stringRules.MaxLen, "\"},")
+			g.P("      }, \"must be at most ", stringRules.MaxLen, " characters long\")).")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("  }")
+		}
+		if stringRules.ExactLen > 0 {
+			g.P("  if len(", fieldName, ") != ", stringRules.ExactLen, " {")
+			g.P("    return validatex.NewError(")
+			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringExactLen\",")
+			g.P("        TemplateData: map[string]string{\"ExactLen\": \"", stringRules.ExactLen, "\"},")
+			g.P("      }, \"must be exactly ", stringRules.ExactLen, " characters long\")).")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("  }")
+		}
+		if stringRules.NonEmpty {
+			g.P("  if len(", fieldName, ") == 0 {")
+			g.P("    return validatex.NewError(")
+			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringNonEmpty\",")
+			g.P("      }, \"must not be empty\")).")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
 			g.P("  }")
 		}
 	}
