@@ -110,5 +110,14 @@ func generateField(g *protogen.GeneratedFile, field *protogen.Field) {
 			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
 			g.P("  }")
 		}
+		if stringRules.Uuid {
+			g.P("  if !validatex.ValidUUID(", fieldName, ") {")
+			g.P("    return validatex.NewError(")
+			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"UUIDInvalid\",")
+			g.P("        TemplateData: map[string]string{\"FieldName\": \"", field.Desc.Name(), "\"},")
+			g.P("      }, \"must be a valid UUID\")).")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("  }")
+		}
 	}
 }

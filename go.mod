@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/BurntSushi/toml v1.4.0
+	github.com/google/uuid v1.6.0
 	github.com/nicksnyder/go-i18n/v2 v2.5.0
 	github.com/protoc-gen/protoc-gen-go-errors v0.3.0
 	github.com/stretchr/testify v1.10.0
