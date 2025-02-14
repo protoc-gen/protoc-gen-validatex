@@ -12,3 +12,6 @@ other = "must be exactly {{.Len}} characters long"
 
 [StringNonEmpty]
 other = "cannot be empty"
+
+[UUIDInvalid]
+other = "must be a valid UUID"

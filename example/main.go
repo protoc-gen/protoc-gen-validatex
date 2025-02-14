@@ -7,15 +7,14 @@ import (
 )
 
 func main() {
-	// Create a SignInRequest instance
-	req := &SignInRequest{
-		Email:    "test.com",
+	req := &PlaygroundRequest{
+		Email:    "a@test.com",
 		Password: "password123",
+		Id:       "123e4567-e89b-12d3-a456-426614174000",
 	}
 
 	ctx := context.WithValue(context.Background(), validatex.KeyXLang, "zh")
 
-	// Validate the SignInRequest instance
 	if err := req.Validate(ctx); err != nil {
 		log.Fatalf("validation failed: %v", err)
 	}

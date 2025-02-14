@@ -11,7 +11,7 @@ import (
 	validatex "github.com/protoc-gen/protoc-gen-validatex/pkg/validatex"
 )
 
-func (x *SignUpRequest) Validate(ctx context.Context) error {
+func (x *PlaygroundRequest) Validate(ctx context.Context) error {
 	if x == nil {
 		return nil
 	}
@@ -35,6 +35,13 @@ func (x *SignUpRequest) Validate(ctx context.Context) error {
 				TemplateData: map[string]string{"MaxLen": "50"},
 			}, "must be at most 50 characters long")).
 			WithMetadata(map[string]string{"field": "password"})
+	}
+	if !validatex.ValidUUID(x.Id) {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "UUIDInvalid",
+				TemplateData: map[string]string{"FieldName": "id"},
+			}, "must be a valid UUID")).
+			WithMetadata(map[string]string{"field": "id"})
 	}
 	return nil
 }

@@ -13,3 +13,6 @@ other = "长度必须等于{{.Len}}"
 [StringNonEmpty]
 other = "不能为空"
 
+[UUIDInvalid]
+other = "必须是一个有效的UUID"
+
