@@ -5,6 +5,7 @@ import (
 	"github.com/protoc-gen/protoc-gen-validatex/version"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
+	"strings"
 )
 
 const (
@@ -28,8 +29,10 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
 	g.QualifiedGoIdent(validatexPkg.Ident(""))
 	g.P()
 
+	jsonName := isJSONName(gen)
+
 	for _, message := range file.Messages {
-		generate(g, message)
+		generate(g, message, jsonName)
 	}
 
 	g.P()
@@ -38,20 +41,24 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
 	g.P("}")
 }
 
-func generate(g *protogen.GeneratedFile, message *protogen.Message) {
+func generate(g *protogen.GeneratedFile, message *protogen.Message, jsonName bool) {
 	g.P("func (x *", message.GoIdent, ") Validate(ctx context.Context) error {")
 	g.P("  if x == nil {")
 	g.P("    return nil")
 	g.P("  }")
 	for _, field := range message.Fields {
-		generateField(g, field)
+		generateField(g, field, jsonName)
 	}
 	g.P("  return nil")
 	g.P("}")
 }
 
-func generateField(g *protogen.GeneratedFile, field *protogen.Field) {
-	fieldName := "x." + field.GoName
+func generateField(g *protogen.GeneratedFile, field *protogen.Field, jsonName bool) {
+	goFieldName := "x." + field.GoName
+	fieldName := string(field.Desc.Name())
+	if jsonName {
+		fieldName = field.Desc.JSONName()
+	}
 
 	options := field.Desc.Options()
 	if options == nil {
@@ -67,57 +74,72 @@ func generateField(g *protogen.GeneratedFile, field *protogen.Field) {
 	case *FieldRules_String_:
 		stringRules := t.String_
 		if stringRules.Email {
-			g.P("  if validatex.ValidEmail(", fieldName, ") != nil {")
+			g.P("  if validatex.ValidEmail(", goFieldName, ") != nil {")
 			g.P("    return validatex.NewError(")
 			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"EmailInvalid\",")
-			g.P("        TemplateData: map[string]string{\"FieldName\": \"", field.Desc.Name(), "\"},")
+			g.P("        TemplateData: map[string]string{\"FieldName\": \"", fieldName, "\"},")
 			g.P("      }, \"must be a valid email\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
 			g.P("  }")
 		}
 		if stringRules.MinLen > 0 {
-			g.P("  if len(", fieldName, ") < ", stringRules.MinLen, " {")
+			g.P("  if len(", goFieldName, ") < ", stringRules.MinLen, " {")
 			g.P("    return validatex.NewError(")
 			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMinLen\",")
 			g.P("        TemplateData: map[string]string{\"MinLen\": \"", stringRules.MinLen, "\"},")
 			g.P("      }, \"must be at least ", stringRules.MinLen, " characters long\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
 			g.P("  }")
 		}
 		if stringRules.MaxLen > 0 {
-			g.P("  if len(", fieldName, ") > ", stringRules.MaxLen, " {")
+			g.P("  if len(", goFieldName, ") > ", stringRules.MaxLen, " {")
 			g.P("    return validatex.NewError(")
 			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMaxLen\",")
 			g.P("        TemplateData: map[string]string{\"MaxLen\": \"", stringRules.MaxLen, "\"},")
 			g.P("      }, \"must be at most ", stringRules.MaxLen, " characters long\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
 			g.P("  }")
 		}
 		if stringRules.ExactLen > 0 {
-			g.P("  if len(", fieldName, ") != ", stringRules.ExactLen, " {")
+			g.P("  if len(", goFieldName, ") != ", stringRules.ExactLen, " {")
 			g.P("    return validatex.NewError(")
 			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringExactLen\",")
 			g.P("        TemplateData: map[string]string{\"ExactLen\": \"", stringRules.ExactLen, "\"},")
 			g.P("      }, \"must be exactly ", stringRules.ExactLen, " characters long\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
 			g.P("  }")
 		}
 		if stringRules.NonEmpty {
-			g.P("  if len(", fieldName, ") == 0 {")
+			g.P("  if len(", goFieldName, ") == 0 {")
 			g.P("    return validatex.NewError(")
 			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringNonEmpty\",")
 			g.P("      }, \"must not be empty\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
 			g.P("  }")
 		}
 		if stringRules.Uuid {
-			g.P("  if !validatex.ValidUUID(", fieldName, ") {")
+			g.P("  if !validatex.ValidUUID(", goFieldName, ") {")
 			g.P("    return validatex.NewError(")
 			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"UUIDInvalid\",")
-			g.P("        TemplateData: map[string]string{\"FieldName\": \"", field.Desc.Name(), "\"},")
+			g.P("        TemplateData: map[string]string{\"FieldName\": \"", fieldName, "\"},")
 			g.P("      }, \"must be a valid UUID\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", field.Desc.Name(), "\"})")
+			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
 			g.P("  }")
 		}
 	}
+}
+
+func isJSONName(gen *protogen.Plugin) bool {
+	parts := strings.Split(gen.Request.GetParameter(), ",")
+
+	for _, part := range parts {
+		if strings.HasPrefix(part, "json_name=") {
+			jsonName := strings.TrimPrefix(part, "json_name=")
+			if strings.ToLower(jsonName) == "true" {
+				return true
+			}
+		}
+	}
+
+	return false
 }

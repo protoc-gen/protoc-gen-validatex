@@ -7,4 +7,5 @@ import "validatex/validatex.proto";
 message SignInRequest {
   string email = 1 [(validatex.rules).string.email = true];
   string password = 2 [(validatex.rules).string = {min_len: 5, max_len: 50}];
+  string phone_number = 3 [(validatex.rules).string = {non_empty: true}];
 }

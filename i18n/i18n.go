@@ -60,6 +60,7 @@ func getI18nDir(gen *protogen.Plugin) (string, string) {
 
 	return dir, outDir
 }
+
 func generateTOML(gen *protogen.Plugin, dir, lang, content string) error {
 	tomlPath := path.Join(dir, lang+".toml")
 
