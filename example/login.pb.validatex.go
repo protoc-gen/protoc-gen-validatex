@@ -38,7 +38,8 @@ func (x *SignInRequest) Validate(ctx context.Context) error {
 	}
 	if len(x.PhoneNumber) == 0 {
 		return validatex.NewError(
-			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "StringNonEmpty"}, "must not be empty")).
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "StringNonEmpty"},
+				"must not be empty")).
 			WithMetadata(map[string]string{"field": "phoneNumber"})
 	}
 	return nil

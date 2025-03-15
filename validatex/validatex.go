@@ -2,17 +2,25 @@ package validatex
 
 import (
 	_ "embed"
+	"fmt"
+	"strings"
+
 	"github.com/protoc-gen/protoc-gen-validatex/version"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
-	"strings"
 )
 
 const (
 	contextPkg   = protogen.GoImportPath("context")
 	i18nPkg      = protogen.GoImportPath("github.com/nicksnyder/go-i18n/v2/i18n")
 	validatexPkg = protogen.GoImportPath("github.com/protoc-gen/protoc-gen-validatex/pkg/validatex")
+	timePkg      = protogen.GoImportPath("time")
 )
+
+type generatedCode struct {
+	code     []string
+	needTime bool
+}
 
 func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
 	filename := file.GeneratedFilenamePrefix + ".pb.validatex.go"
@@ -24,15 +32,34 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File, i18nDir string) {
 	g.P()
 	g.P("package ", file.GoPackageName)
 	g.P()
+
+	// 先生成所有代码并收集包信息
+	var needTime bool
+	for _, message := range file.Messages {
+		for _, field := range message.Fields {
+			genCode := generateField(field, isJSONName(gen))
+			if genCode.needTime {
+				needTime = true
+				break
+			}
+		}
+		if needTime {
+			break
+		}
+	}
+
+	// 根据需要导入包
 	g.QualifiedGoIdent(contextPkg.Ident(""))
 	g.QualifiedGoIdent(i18nPkg.Ident(""))
 	g.QualifiedGoIdent(validatexPkg.Ident(""))
+	if needTime {
+		g.QualifiedGoIdent(timePkg.Ident(""))
+	}
 	g.P()
 
-	jsonName := isJSONName(gen)
-
+	// 生成所有消息的验证代码
 	for _, message := range file.Messages {
-		generate(g, message, jsonName)
+		generate(g, message, isJSONName(gen))
 	}
 
 	g.P()
@@ -46,14 +73,21 @@ func generate(g *protogen.GeneratedFile, message *protogen.Message, jsonName boo
 	g.P("  if x == nil {")
 	g.P("    return nil")
 	g.P("  }")
+
 	for _, field := range message.Fields {
-		generateField(g, field, jsonName)
+		genCode := generateField(field, jsonName)
+		for _, line := range genCode.code {
+			g.P(line)
+		}
 	}
 	g.P("  return nil")
 	g.P("}")
 }
 
-func generateField(g *protogen.GeneratedFile, field *protogen.Field, jsonName bool) {
+func generateField(field *protogen.Field, jsonName bool) generatedCode {
+	var result generatedCode
+	result.code = make([]string, 0)
+
 	goFieldName := "x." + field.GoName
 	fieldName := string(field.Desc.Name())
 	if jsonName {
@@ -62,71 +96,267 @@ func generateField(g *protogen.GeneratedFile, field *protogen.Field, jsonName bo
 
 	options := field.Desc.Options()
 	if options == nil {
-		return
+		return result
 	}
 
 	rules := proto.GetExtension(options, E_Rules).(*FieldRules)
 	if rules == nil || rules.Type == nil {
-		return
+		return result
 	}
 
 	switch t := rules.Type.(type) {
 	case *FieldRules_String_:
 		stringRules := t.String_
 		if stringRules.Email {
-			g.P("  if validatex.ValidEmail(", goFieldName, ") != nil {")
-			g.P("    return validatex.NewError(")
-			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"EmailInvalid\",")
-			g.P("        TemplateData: map[string]string{\"FieldName\": \"", fieldName, "\"},")
-			g.P("      }, \"must be a valid email\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
-			g.P("  }")
+			result.code = append(result.code,
+				"  if validatex.ValidEmail("+goFieldName+") != nil {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"EmailInvalid\",",
+				"        TemplateData: map[string]string{\"FieldName\": \""+fieldName+"\"},",
+				"      }, \"must be a valid email\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
 		}
 		if stringRules.MinLen > 0 {
-			g.P("  if len(", goFieldName, ") < ", stringRules.MinLen, " {")
-			g.P("    return validatex.NewError(")
-			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMinLen\",")
-			g.P("        TemplateData: map[string]string{\"MinLen\": \"", stringRules.MinLen, "\"},")
-			g.P("      }, \"must be at least ", stringRules.MinLen, " characters long\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
-			g.P("  }")
+			result.code = append(result.code,
+				"  if len("+goFieldName+") < "+fmt.Sprint(stringRules.MinLen)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMinLen\",",
+				"        TemplateData: map[string]string{\"MinLen\": \""+fmt.Sprint(stringRules.MinLen)+"\"},",
+				"      }, \"must be at least "+fmt.Sprint(stringRules.MinLen)+" characters long\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
 		}
 		if stringRules.MaxLen > 0 {
-			g.P("  if len(", goFieldName, ") > ", stringRules.MaxLen, " {")
-			g.P("    return validatex.NewError(")
-			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMaxLen\",")
-			g.P("        TemplateData: map[string]string{\"MaxLen\": \"", stringRules.MaxLen, "\"},")
-			g.P("      }, \"must be at most ", stringRules.MaxLen, " characters long\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
-			g.P("  }")
+			result.code = append(result.code,
+				"  if len("+goFieldName+") > "+fmt.Sprint(stringRules.MaxLen)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringMaxLen\",",
+				"        TemplateData: map[string]string{\"MaxLen\": \""+fmt.Sprint(stringRules.MaxLen)+"\"},",
+				"      }, \"must be at most "+fmt.Sprint(stringRules.MaxLen)+" characters long\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
 		}
 		if stringRules.ExactLen > 0 {
-			g.P("  if len(", goFieldName, ") != ", stringRules.ExactLen, " {")
-			g.P("    return validatex.NewError(")
-			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringExactLen\",")
-			g.P("        TemplateData: map[string]string{\"ExactLen\": \"", stringRules.ExactLen, "\"},")
-			g.P("      }, \"must be exactly ", stringRules.ExactLen, " characters long\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
-			g.P("  }")
+			result.code = append(result.code,
+				"  if len("+goFieldName+") != "+fmt.Sprint(stringRules.ExactLen)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringExactLen\",",
+				"        TemplateData: map[string]string{\"ExactLen\": \""+fmt.Sprint(stringRules.ExactLen)+"\"},",
+				"      }, \"must be exactly "+fmt.Sprint(stringRules.ExactLen)+" characters long\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
 		}
 		if stringRules.NonEmpty {
-			g.P("  if len(", goFieldName, ") == 0 {")
-			g.P("    return validatex.NewError(")
-			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringNonEmpty\",")
-			g.P("      }, \"must not be empty\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
-			g.P("  }")
+			result.code = append(result.code,
+				"  if len("+goFieldName+") == 0 {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"StringNonEmpty\"},",
+				"      \"must not be empty\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
 		}
 		if stringRules.Uuid {
-			g.P("  if !validatex.ValidUUID(", goFieldName, ") {")
-			g.P("    return validatex.NewError(")
-			g.P("      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"UUIDInvalid\",")
-			g.P("        TemplateData: map[string]string{\"FieldName\": \"", fieldName, "\"},")
-			g.P("      }, \"must be a valid UUID\")).")
-			g.P("      WithMetadata(map[string]string{\"field\": \"", fieldName, "\"})")
-			g.P("  }")
+			result.code = append(result.code,
+				"  if !validatex.ValidUUID("+goFieldName+") {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"UUIDInvalid\",",
+				"        TemplateData: map[string]string{\"FieldName\": \""+fieldName+"\"},",
+				"      }, \"must be a valid UUID\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+	case *FieldRules_Numeric:
+		numericRules := t.Numeric
+		if numericRules.Gt != 0 {
+			result.code = append(result.code,
+				"  if "+goFieldName+" <= "+fmt.Sprint(numericRules.Gt)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericGt\",",
+				"        TemplateData: map[string]string{\"Value\": \""+fmt.Sprint(numericRules.Gt)+"\"},",
+				"      }, \"must be greater than "+fmt.Sprint(numericRules.Gt)+"\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if numericRules.Gte != 0 {
+			result.code = append(result.code,
+				"  if "+goFieldName+" < "+fmt.Sprint(numericRules.Gte)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericGte\",",
+				"        TemplateData: map[string]string{\"Value\": \""+fmt.Sprint(numericRules.Gte)+"\"},",
+				"      }, \"must be greater than or equal to "+fmt.Sprint(numericRules.Gte)+"\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if numericRules.Lt != 0 {
+			result.code = append(result.code,
+				"  if "+goFieldName+" >= "+fmt.Sprint(numericRules.Lt)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericLt\",",
+				"        TemplateData: map[string]string{\"Value\": \""+fmt.Sprint(numericRules.Lt)+"\"},",
+				"      }, \"must be less than "+fmt.Sprint(numericRules.Lt)+"\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if numericRules.Lte != 0 {
+			result.code = append(result.code,
+				"  if "+goFieldName+" > "+fmt.Sprint(numericRules.Lte)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericLte\",",
+				"        TemplateData: map[string]string{\"Value\": \""+fmt.Sprint(numericRules.Lte)+"\"},",
+				"      }, \"must be less than or equal to "+fmt.Sprint(numericRules.Lte)+"\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if numericRules.Positive {
+			result.code = append(result.code,
+				"  if "+goFieldName+" <= 0 {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericPositive\"},",
+				"      \"must be positive\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if numericRules.Negative {
+			result.code = append(result.code,
+				"  if "+goFieldName+" >= 0 {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericNegative\"},",
+				"      \"must be negative\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if numericRules.EqualTo != 0 {
+			result.code = append(result.code,
+				"  if "+goFieldName+" != "+fmt.Sprint(numericRules.EqualTo)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericEqualTo\",",
+				"        TemplateData: map[string]string{\"Value\": \""+fmt.Sprint(numericRules.EqualTo)+"\"},",
+				"      }, \"must be equal to "+fmt.Sprint(numericRules.EqualTo)+"\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if numericRules.NonZero {
+			result.code = append(result.code,
+				"  if "+goFieldName+" == 0 {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"NumericNonZero\"},",
+				"      \"must not be zero\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+	case *FieldRules_Timestamp:
+		result.needTime = true
+		timestampRules := t.Timestamp
+		if timestampRules.MinTime != nil {
+			result.code = append(result.code,
+				"  minTime := time.Unix("+fmt.Sprint(timestampRules.MinTime.GetSeconds())+", "+fmt.Sprint(timestampRules.MinTime.GetNanos())+")",
+				"  if "+goFieldName+".AsTime().Before(minTime) {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"TimestampMin\",",
+				"        TemplateData: map[string]string{\"MinTime\": minTime.Format(\"2006-01-02 15:04:05\")},",
+				"      }, \"must be after \" + minTime.Format(\"2006-01-02 15:04:05\"))).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if timestampRules.MaxTime != nil {
+			result.code = append(result.code,
+				"  maxTime := time.Unix("+fmt.Sprint(timestampRules.MaxTime.GetSeconds())+", "+fmt.Sprint(timestampRules.MaxTime.GetNanos())+")",
+				"  if "+goFieldName+".AsTime().After(maxTime) {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"TimestampMax\",",
+				"        TemplateData: map[string]string{\"MaxTime\": maxTime.Format(\"2006-01-02 15:04:05\")},",
+				"      }, \"must be before \" + maxTime.Format(\"2006-01-02 15:04:05\"))).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if timestampRules.RequiredNow {
+			result.code = append(result.code,
+				"  now := time.Now()",
+				"  diff := "+goFieldName+".AsTime().Sub(now)",
+				"  if diff < -time.Minute || diff > time.Minute {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"TimestampNow\"},",
+				"      \"must be within one minute of current time\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if timestampRules.RequiredPast {
+			result.code = append(result.code,
+				"  if "+goFieldName+".AsTime().After(time.Now()) {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"TimestampPast\"},",
+				"      \"must be in the past\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if timestampRules.RequiredFuture {
+			result.code = append(result.code,
+				"  if "+goFieldName+".AsTime().Before(time.Now()) {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"TimestampFuture\"},",
+				"      \"must be in the future\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+	case *FieldRules_Repeated:
+		repeatedRules := t.Repeated
+		if repeatedRules.MinItems > 0 {
+			result.code = append(result.code,
+				"  if len("+goFieldName+") < "+fmt.Sprint(repeatedRules.MinItems)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"RepeatedMin\",",
+				"        TemplateData: map[string]string{\"MinItems\": \""+fmt.Sprint(repeatedRules.MinItems)+"\"},",
+				"      }, \"must have at least "+fmt.Sprint(repeatedRules.MinItems)+" items\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if repeatedRules.MaxItems > 0 {
+			result.code = append(result.code,
+				"  if len("+goFieldName+") > "+fmt.Sprint(repeatedRules.MaxItems)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"RepeatedMax\",",
+				"        TemplateData: map[string]string{\"MaxItems\": \""+fmt.Sprint(repeatedRules.MaxItems)+"\"},",
+				"      }, \"must have at most "+fmt.Sprint(repeatedRules.MaxItems)+" items\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if repeatedRules.ExactItems > 0 {
+			result.code = append(result.code,
+				"  if len("+goFieldName+") != "+fmt.Sprint(repeatedRules.ExactItems)+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"RepeatedExact\",",
+				"        TemplateData: map[string]string{\"ExactItems\": \""+fmt.Sprint(repeatedRules.ExactItems)+"\"},",
+				"      }, \"must have exactly "+fmt.Sprint(repeatedRules.ExactItems)+" items\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
+		}
+		if repeatedRules.Unique {
+			result.code = append(result.code,
+				"  seen := make(map[interface{}]struct{})",
+				"  for _, item := range "+goFieldName+" {",
+				"    if _, exists := seen[item]; exists {",
+				"      return validatex.NewError(",
+				"        validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"RepeatedUnique\"},",
+				"        \"must contain unique items\")).",
+				"        WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"    }",
+				"    seen[item] = struct{}{}",
+				"  }")
+		}
+	case *FieldRules_Bool:
+		boolRules := t.Bool
+		if boolRules.Required {
+			result.code = append(result.code,
+				"  if !"+goFieldName+" {",
+				"    return validatex.NewError(",
+				"      validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: \"BoolRequired\"},",
+				"      \"must be true\")).",
+				"      WithMetadata(map[string]string{\"field\": \""+fieldName+"\"})",
+				"  }")
 		}
 	}
+	return result
 }
 
 func isJSONName(gen *protogen.Plugin) bool {

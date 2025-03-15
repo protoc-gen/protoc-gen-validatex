@@ -2,10 +2,63 @@ syntax = "proto3";
 
 option go_package = "github.com/protoc-gen/protoc-gen-validatex/example;main";
 
+import "google/protobuf/timestamp.proto";
 import "validatex/validatex.proto";
 
-message PlaygroundRequest {
-  string email = 1 [(validatex.rules).string.email = true];
-  string password = 2 [(validatex.rules).string = {min_len: 5, max_len: 50}];
-  string id = 3 [(validatex.rules).string = {uuid: true}];
+message Playground {
+
+  string email = 1 [(validatex.rules).string = {
+    email: true
+  }];
+  string username = 2 [(validatex.rules).string = {
+    min_len: 3,
+    max_len: 20,
+    non_empty: true
+  }];
+  string uuid = 3 [(validatex.rules).string = {
+    uuid: true
+  }];
+
+  double score = 4 [(validatex.rules).numeric = {
+    gt: 0,
+    lte: 100
+  }];
+  int32 age = 5 [(validatex.rules).numeric = {
+    gte: 0,
+    lt: 150
+  }];
+  double temperature = 6 [(validatex.rules).numeric = {
+    positive: true,
+    non_zero: true
+  }];
+
+  google.protobuf.Timestamp created_at = 7 [(validatex.rules).timestamp = {
+    required_past: true
+  }];
+  google.protobuf.Timestamp updated_at = 8 [(validatex.rules).timestamp = {
+    required_now: true
+  }];
+  google.protobuf.Timestamp expires_at = 9 [(validatex.rules).timestamp = {
+    required_future: true
+  }];
+  google.protobuf.Timestamp event_time = 10 [(validatex.rules).timestamp = {
+    min_time: {seconds: 1672531200},
+    max_time: {seconds: 1704067199}
+  }];
+
+  repeated string tags = 11 [(validatex.rules).repeated = {
+    min_items: 1,
+    max_items: 5,
+    unique: true
+  }];
+  repeated int32 scores = 12 [(validatex.rules).repeated = {
+    exact_items: 3
+  }];
+
+  bool terms_accepted = 13 [(validatex.rules).bool = {
+    required: true
+  }];
+  bool is_adult = 14 [(validatex.rules).bool = {
+    required: true
+  }];
 }

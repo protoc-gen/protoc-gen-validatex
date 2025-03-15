@@ -15,3 +15,57 @@ other = "cannot be empty"
 
 [UUIDInvalid]
 other = "must be a valid UUID"
+
+[NumericPositive]
+other = "must be positive"
+
+[NumericNegative]
+other = "must be negative"
+
+[NumericEqualTo]
+other = "must be equal to {{.Value}}"
+
+[NumericNonZero]
+other = "must not be zero"
+
+[NumericGt]
+other = "must be greater than {{.Value}}"
+
+[NumericGte]
+other = "must be greater than or equal to {{.Value}}"
+
+[NumericLt]
+other = "must be less than {{.Value}}"
+
+[NumericLte]
+other = "must be less than or equal to {{.Value}}"
+
+[TimestampMin]
+other = "must be after {{.MinTime}}"
+
+[TimestampMax]
+other = "must be before {{.MaxTime}}"
+
+[TimestampNow]
+other = "must be within one minute of current time"
+
+[TimestampPast]
+other = "must be in the past"
+
+[TimestampFuture]
+other = "must be in the future"
+
+[RepeatedMin]
+other = "must have at least {{.MinItems}} items"
+
+[RepeatedMax]
+other = "must have at most {{.MaxItems}} items"
+
+[RepeatedExact]
+other = "must have exactly {{.ExactItems}} items"
+
+[RepeatedUnique]
+other = "must contain unique items"
+
+[BoolRequired]
+other = "must be true"

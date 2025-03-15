@@ -9,9 +9,10 @@ import (
 	context "context"
 	i18n "github.com/nicksnyder/go-i18n/v2/i18n"
 	validatex "github.com/protoc-gen/protoc-gen-validatex/pkg/validatex"
+	time "time"
 )
 
-func (x *PlaygroundRequest) Validate(ctx context.Context) error {
+func (x *Playground) Validate(ctx context.Context) error {
 	if x == nil {
 		return nil
 	}
@@ -22,26 +23,137 @@ func (x *PlaygroundRequest) Validate(ctx context.Context) error {
 			}, "must be a valid email")).
 			WithMetadata(map[string]string{"field": "email"})
 	}
-	if len(x.Password) < 5 {
+	if len(x.Username) < 3 {
 		return validatex.NewError(
 			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "StringMinLen",
-				TemplateData: map[string]string{"MinLen": "5"},
-			}, "must be at least 5 characters long")).
-			WithMetadata(map[string]string{"field": "password"})
+				TemplateData: map[string]string{"MinLen": "3"},
+			}, "must be at least 3 characters long")).
+			WithMetadata(map[string]string{"field": "username"})
 	}
-	if len(x.Password) > 50 {
+	if len(x.Username) > 20 {
 		return validatex.NewError(
 			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "StringMaxLen",
-				TemplateData: map[string]string{"MaxLen": "50"},
-			}, "must be at most 50 characters long")).
-			WithMetadata(map[string]string{"field": "password"})
+				TemplateData: map[string]string{"MaxLen": "20"},
+			}, "must be at most 20 characters long")).
+			WithMetadata(map[string]string{"field": "username"})
 	}
-	if !validatex.ValidUUID(x.Id) {
+	if len(x.Username) == 0 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "StringNonEmpty"},
+				"must not be empty")).
+			WithMetadata(map[string]string{"field": "username"})
+	}
+	if !validatex.ValidUUID(x.Uuid) {
 		return validatex.NewError(
 			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "UUIDInvalid",
-				TemplateData: map[string]string{"FieldName": "id"},
+				TemplateData: map[string]string{"FieldName": "uuid"},
 			}, "must be a valid UUID")).
-			WithMetadata(map[string]string{"field": "id"})
+			WithMetadata(map[string]string{"field": "uuid"})
+	}
+	if x.Score > 100 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "NumericLte",
+				TemplateData: map[string]string{"Value": "100"},
+			}, "must be less than or equal to 100")).
+			WithMetadata(map[string]string{"field": "score"})
+	}
+	if x.Age >= 150 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "NumericLt",
+				TemplateData: map[string]string{"Value": "150"},
+			}, "must be less than 150")).
+			WithMetadata(map[string]string{"field": "age"})
+	}
+	if x.Temperature <= 0 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "NumericPositive"},
+				"must be positive")).
+			WithMetadata(map[string]string{"field": "temperature"})
+	}
+	if x.Temperature == 0 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "NumericNonZero"},
+				"must not be zero")).
+			WithMetadata(map[string]string{"field": "temperature"})
+	}
+	if x.CreatedAt.AsTime().After(time.Now()) {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "TimestampPast"},
+				"must be in the past")).
+			WithMetadata(map[string]string{"field": "createdAt"})
+	}
+	now := time.Now()
+	diff := x.UpdatedAt.AsTime().Sub(now)
+	if diff < -time.Minute || diff > time.Minute {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "TimestampNow"},
+				"must be within one minute of current time")).
+			WithMetadata(map[string]string{"field": "updatedAt"})
+	}
+	if x.ExpiresAt.AsTime().Before(time.Now()) {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "TimestampFuture"},
+				"must be in the future")).
+			WithMetadata(map[string]string{"field": "expiresAt"})
+	}
+	minTime := time.Unix(1672531200, 0)
+	if x.EventTime.AsTime().Before(minTime) {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "TimestampMin",
+				TemplateData: map[string]string{"MinTime": minTime.Format("2006-01-02 15:04:05")},
+			}, "must be after "+minTime.Format("2006-01-02 15:04:05"))).
+			WithMetadata(map[string]string{"field": "eventTime"})
+	}
+	maxTime := time.Unix(1704067199, 0)
+	if x.EventTime.AsTime().After(maxTime) {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "TimestampMax",
+				TemplateData: map[string]string{"MaxTime": maxTime.Format("2006-01-02 15:04:05")},
+			}, "must be before "+maxTime.Format("2006-01-02 15:04:05"))).
+			WithMetadata(map[string]string{"field": "eventTime"})
+	}
+	if len(x.Tags) < 1 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "RepeatedMin",
+				TemplateData: map[string]string{"MinItems": "1"},
+			}, "must have at least 1 items")).
+			WithMetadata(map[string]string{"field": "tags"})
+	}
+	if len(x.Tags) > 5 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "RepeatedMax",
+				TemplateData: map[string]string{"MaxItems": "5"},
+			}, "must have at most 5 items")).
+			WithMetadata(map[string]string{"field": "tags"})
+	}
+	seen := make(map[interface{}]struct{})
+	for _, item := range x.Tags {
+		if _, exists := seen[item]; exists {
+			return validatex.NewError(
+				validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "RepeatedUnique"},
+					"must contain unique items")).
+				WithMetadata(map[string]string{"field": "tags"})
+		}
+		seen[item] = struct{}{}
+	}
+	if len(x.Scores) != 3 {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "RepeatedExact",
+				TemplateData: map[string]string{"ExactItems": "3"},
+			}, "must have exactly 3 items")).
+			WithMetadata(map[string]string{"field": "scores"})
+	}
+	if !x.TermsAccepted {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "BoolRequired"},
+				"must be true")).
+			WithMetadata(map[string]string{"field": "termsAccepted"})
+	}
+	if !x.IsAdult {
+		return validatex.NewError(
+			validatex.MustLocalize(ctx, &i18n.LocalizeConfig{MessageID: "BoolRequired"},
+				"must be true")).
+			WithMetadata(map[string]string{"field": "isAdult"})
 	}
 	return nil
 }

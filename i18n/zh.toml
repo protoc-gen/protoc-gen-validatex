@@ -15,3 +15,57 @@ other = "不能为空"
 
 [UUIDInvalid]
 other = "必须是一个有效的UUID"
+
+[NumericPositive]
+other = "必须是正数"
+
+[NumericNegative]
+other = "必须是负数"
+
+[NumericEqualTo]
+other = "必须等于{{.Value}}"
+
+[NumericNonZero]
+other = "不能为零"
+
+[NumericGt]
+other = "必须大于{{.Value}}"
+
+[NumericGte]
+other = "必须大于或等于{{.Value}}"
+
+[NumericLt]
+other = "必须小于{{.Value}}"
+
+[NumericLte]
+other = "必须小于或等于{{.Value}}"
+
+[TimestampMin]
+other = "必须晚于 {{.MinTime}}"
+
+[TimestampMax]
+other = "必须早于 {{.MaxTime}}"
+
+[TimestampNow]
+other = "必须在当前时间的一分钟范围内"
+
+[TimestampPast]
+other = "必须是过去的时间"
+
+[TimestampFuture]
+other = "必须是未来的时间"
+
+[RepeatedMin]
+other = "至少需要{{.MinItems}}个项目"
+
+[RepeatedMax]
+other = "最多只能有{{.MaxItems}}个项目"
+
+[RepeatedExact]
+other = "必须恰好有{{.ExactItems}}个项目"
+
+[RepeatedUnique]
+other = "所有项目必须唯一"
+
+[BoolRequired]
+other = "必须为真"
