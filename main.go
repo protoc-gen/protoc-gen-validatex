@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/protoc-gen/protoc-gen-validatex/i18n"
 	"github.com/protoc-gen/protoc-gen-validatex/validatex"
+	gengo "google.golang.org/protobuf/cmd/protoc-gen-go/internal_gengo"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
@@ -15,6 +16,7 @@ func main() {
 			}
 			validatex.GenerateFile(gen, f, i18nDir)
 		}
+		gen.SupportedFeatures = gengo.SupportedFeatures
 		return nil
 	})
 }
